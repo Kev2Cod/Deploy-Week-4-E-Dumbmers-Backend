@@ -9,34 +9,20 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      transaction.belongsTo(models.product, {
-        as: "product",
-        foreignKey: {
-          name: "idProduct",
-        },
-      });
-
       transaction.belongsTo(models.user, {
-        as: "buyer",
+        as: "user",
         foreignKey: {
-          name: "idBuyer",
-        },
-      });
-
-      transaction.belongsTo(models.user, {
-        as: "seller",
-        foreignKey: {
-          name: "idSeller",
+          name: "userId",
         },
       });
     }
   }
   transaction.init(
     {
-      idProduct: DataTypes.INTEGER,
-      idBuyer: DataTypes.INTEGER,
-      idSeller: DataTypes.INTEGER,
-      price: DataTypes.INTEGER,
+      startDate: DataTypes.DATE,
+      dueDate: DataTypes.DATE,
+      userId: DataTypes.INTEGER,
+      paymentMethod: DataTypes.STRING,
       status: DataTypes.STRING,
     },
     {

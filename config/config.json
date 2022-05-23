@@ -2,7 +2,7 @@
   "development": {
     "username": "root",
     "password": null,
-    "database": "dumbmers_database",
+    "database": "dumbplay_database",
     "host": "127.0.0.1",
     "dialect": "mysql"
   },
@@ -23,5 +23,5 @@
         "rejectUnauthorized": false
       }
     }
-   }
+  }
 }

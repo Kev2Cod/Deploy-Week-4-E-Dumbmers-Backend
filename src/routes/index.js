@@ -3,31 +3,36 @@ const express = require("express");
 const router = express.Router();
 
 const { addUser, getUsers, getUser, updateUser, deleteUser } = require("../controllers/user");
-const { getProduct, addProduct, getDetailProduct, updateProduct, deleteProduct } = require("../controllers/product");
 const { addTransaction, getTransactions, getTransaction, notification } = require("../controllers/transaction");
+const { getArtis, addArtis } = require("../controllers/artis");
+const { historys, getHistory } = require("../controllers/history");
 const { register, login, checkAuth } = require("../controllers/auth");
+const { likeById, likelike } = require("../controllers/like");
+const { musics, addMusic } = require("../controllers/music");
 const { auth } = require("../middlewares/auth");
 const { uploadFile } = require("../middlewares/uploadFile");
-const { getCategory, addCategory, deleteCategory, updateCategory, getDetailCategory } = require("../controllers/category");
-const { addProfile, updateProfile } = require("../controllers/profile");
 
 // Users
 router.get("/users", getUsers);
 router.get("/user/:id", getUser);
+router.patch("/user/:id", updateUser);
 
-// Products
-router.get("/products", getProduct);
-router.get("/product/:id", getDetailProduct);
-router.post("/product", auth, uploadFile("image"), addProduct);
-router.patch("/product/:id", auth, uploadFile("image"), updateProduct);
-router.delete("/product/:id", auth, deleteProduct);
+// Music
+// router menampikan data
+router.get("/musics", musics);
+router.post("/add-music", uploadFile("imageSong", "fileSong"), addMusic);
 
-// Categories
-router.get("/categories", getCategory);
-router.get("/category/:id", getDetailCategory);
-router.post("/category", auth, addCategory);
-router.delete("/category/:id", auth, deleteCategory);
-router.patch("/category/:id", auth, updateCategory);
+// Like
+router.post("/like", auth, likelike);
+router.get("/like/:id", likeById);
+
+// Artis
+router.get("/artis", getArtis);
+router.post("/add-artis", addArtis); // must ad auth
+
+// History
+router.post("/history", historys);
+router.get("/history/:id", getHistory);
 
 // Transaction
 router.get("/transactions", auth, getTransactions);
@@ -38,12 +43,7 @@ router.post("/register", register);
 router.post("/login", login);
 router.get("/check-auth/", auth, checkAuth);
 
-// Profile
-router.post("/profile", addProfile);
-router.patch("/profile", auth, uploadFile("image"), updateProfile);
-
-// Notification 
+// Notification for midrans
 router.post("/notification", notification);
-
 
 module.exports = router;

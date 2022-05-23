@@ -8,32 +8,11 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
-      user.hasOne(models.profile, {
-        as: "profile",
+      // hasOne ke database feed
+      user.hasOne(models.transaction, {
+        as: "transaction",
         foreignKey: {
-          name: "idUser",
-        },
-      });
-
-      user.hasMany(models.product, {
-        as: "product",
-        foreignKey: {
-          name: "idUser",
-        },
-      });
-
-      user.hasMany(models.transaction, {
-        as: "buyerTransactions",
-        foreignKey: {
-          name: "idBuyer",
-        },
-      });
-
-      user.hasMany(models.transaction, {
-        as: "sellerTransactions",
-        foreignKey: {
-          name: "idSeller",
+          name: "userId",
         },
       });
 
@@ -55,10 +34,15 @@ module.exports = (sequelize, DataTypes) => {
   }
   user.init(
     {
+      name: DataTypes.STRING,
       email: DataTypes.STRING,
       password: DataTypes.STRING,
-      name: DataTypes.STRING,
       status: DataTypes.STRING,
+      gender: DataTypes.STRING,
+      phone: DataTypes.STRING,
+      address: DataTypes.STRING,
+      image: DataTypes.STRING,
+      subscribe: DataTypes.BOOLEAN,
     },
     {
       sequelize,

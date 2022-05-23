@@ -1,50 +1,28 @@
-const { transaction, product, user, profile } = require("../../models");
+const { transaction, user } = require("../../models");
 
 const midtransClient = require("midtrans-client");
 const nodemailer = require("nodemailer");
 
+// GET TRANSACTIONS
 exports.getTransactions = async (req, res) => {
   try {
     let data = await transaction.findAll({
-      attributes: {
-        exclude: ["idProduct", "idBuyer", "idSeller", "updatedAt"],
+      include: {
+        model: user,
+        as: "user",
+        attributes: {
+          exclude: ["createdAt", "updatedAt", "password"],
+        },
       },
-      include: [
-        {
-          model: product,
-          as: "product",
-          attributes: {
-            exclude: ["desc", "qty", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: user,
-          as: "buyer",
-          attributes: {
-            exclude: ["password", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: user,
-          as: "seller",
-          attributes: {
-            exclude: ["password", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-      ],
+      attributes: {
+        exclude: ["createdAt", "updatedAt"],
+      },
+      order: [["createdAt", "DESC"]],
     });
 
-    data = JSON.parse(JSON.stringify(data));
+    console.log("GET TRANSACTIONS: ", data);
 
-    data = data.map((item) => {
-      return {
-        ...item,
-        product: {
-          ...item.product,
-          image: process.env.PATH_FILE + item.product.image,
-        },
-      };
-    });
+    // data = JSON.parse(JSON.stringify(data));
 
     res.status(200).send({
       status: "Get data Transaction Success",
@@ -60,53 +38,17 @@ exports.getTransactions = async (req, res) => {
 };
 
 exports.getTransaction = async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const idBuyer = req.user.id;
-    let data = await transaction.findAll({
-      where: {
-        idBuyer, //? untuk apa?
-      },
-      order: [["createdAt", "DESC"]], //? untuk apa?
+    let data = await transaction.findOne({
       attributes: {
-        exclude: ["idProduct", "idBuyer", "idSeller", "updatedAt"],
+        exclude: ["createdAt", "updatedAt"],
       },
-      include: [
-        {
-          model: product,
-          as: "product",
-          attributes: {
-            exclude: ["desc", "qty", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: user,
-          as: "buyer",
-          attributes: {
-            exclude: ["password", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: user,
-          as: "seller",
-          attributes: {
-            exclude: ["password", "idUser", "createdAt", "updatedAt"],
-          },
-        },
-      ],
+      where: {
+        id,
+      },
     });
-
-    data = JSON.parse(JSON.stringify(data));
-
-    data = data.map((item) => {
-      return {
-        ...item,
-        product: {
-          ...item.product,
-          image: process.env.PATH_FILE + item.product.image, 
-        },
-      };
-    });
-
     res.status(200).send({
       status: "Get data Transaction Success",
       data,
@@ -120,31 +62,51 @@ exports.getTransaction = async (req, res) => {
   }
 };
 
-// =========== BUY PRODUCT =============
+// =========== DELETE TRANSACTION =============
+exports.deleteTransaction = async (req, res) => {
+  const { id } = req.params;
+  try {
+    await transaction.destroy({
+      where: {
+        id,
+      },
+    });
+
+    res.status(200).send({
+      status: "Delete Transaction Success",
+      data,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(404).send({
+      status: "Delete Transactions Failed",
+      message: "Server Error",
+    });
+  }
+};
+
+// =========== ADD TRANSACTION =============
 exports.addTransaction = async (req, res) => {
   try {
     // Prepare transaction data from body here ...
     let data = req.body;
+
     data = {
-      id: parseInt(data.idProduct + Math.random().toString().slice(3, 8)),
+      id: parseInt(Math.random().toString().slice(3, 8)),
       ...data,
-      idBuyer: req.user.id,
+      userId: req.user.id,
       status: "pending",
     };
-    // Insert transaction data here ...
+
+    console.log("Catch Data: ", data.price);
+
+    // Insert data transaction to database
     const newData = await transaction.create(data);
 
-    // Get buyer data here ...
+    // Get user
     const buyerData = await user.findOne({
-      include: {
-        model: profile,
-        as: "profile",
-        attributes: {
-          exclude: ["createdAt", "updatedAt", "idUser"],
-        },
-      },
       where: {
-        id: newData.idBuyer,
+        id: newData.userId,
       },
       attributes: {
         exclude: ["createdAt", "updatedAt", "password"],
@@ -162,7 +124,7 @@ exports.addTransaction = async (req, res) => {
     let parameter = {
       transaction_details: {
         order_id: newData.id,
-        gross_amount: newData.price,
+        gross_amount: data.price,
       },
       credit_card: {
         secure: true,
@@ -170,26 +132,22 @@ exports.addTransaction = async (req, res) => {
       customer_details: {
         full_name: buyerData?.name,
         email: buyerData?.email,
-        phone: buyerData?.profile?.phone,
+        phone: buyerData?.phone,
       },
     };
 
     // create transaction
     const payment = await snap.createTransaction(parameter);
-    console.log(payment);
 
     res.send({
       status: "Pending",
       message: "Pending transaction payment gateway",
       payment,
-      product: {
-        id: data.idProduct,
-      },
     });
   } catch (error) {
     console.log(error);
     res.status(404).send({
-      status: "Buy Products Failed",
+      status: "Payment Failed",
       message: "Server Error",
     });
   }
@@ -224,39 +182,40 @@ exports.notification = async (req, res) => {
     const fraudStatus = statusResponse.fraud_status; //status transaction midtrans
 
     console.log(statusResponse);
+    console.log("paymentType1", statusResponse?.payment_type);
+    console.log("paymentType2", statusResponse?.notification);
 
     if (transactionStatus == "capture") {
       if (fraudStatus == "challenge") {
         // TODO set transaction status on your database to 'challenge'
         // and response with 200 OK
-        sendEmail("pending", orderId);
-        updateTransaction("pending", orderId);
+        // sendEmail("pending", orderId);
+        updateTransaction("pending", orderId, false, statusResponse?.payment_type);
         res.status(200);
       } else if (fraudStatus == "accept") {
         // TODO set transaction status on your database to 'success'
         // and response with 200 OK
-        sendEmail("success", orderId);
-        updateProduct(orderId);
-        updateTransaction("success", orderId);
+        // sendEmail("success", orderId);
+        updateTransaction("success", orderId, true, statusResponse?.payment_type, statusResponse?.transaction_time, statusResponse?.gross_amount);
         res.status(200);
       }
     } else if (transactionStatus == "settlement") {
       // TODO set transaction status on your database to 'success'
       // and response with 200 OK
-      sendEmail("success", orderId);
-      updateTransaction("success", orderId);
+      // sendEmail("success", orderId);
+      updateTransaction("success", orderId, true, statusResponse?.payment_type, statusResponse?.transaction_time, statusResponse?.gross_amount);
       res.status(200);
     } else if (transactionStatus == "cancel" || transactionStatus == "deny" || transactionStatus == "expire") {
       // TODO set transaction status on your database to 'failure'
       // and response with 200 OK
-      sendEmail("failed", orderId);
-      updateTransaction("failed", orderId);
+      // sendEmail("failed", orderId);
+      updateTransaction("failed", orderId, false, statusResponse?.payment_type);
       res.status(200);
     } else if (transactionStatus == "pending") {
       // TODO set transaction status on your database to 'pending' / waiting payment
       // and response with 200 OK
-      sendEmail("pending", orderId);
-      updateTransaction("pending", orderId);
+      // sendEmail("pending", orderId);
+      updateTransaction("pending", orderId, false, statusResponse?.payment_type);
       res.status(200);
     }
   } catch (error) {
@@ -266,114 +225,217 @@ exports.notification = async (req, res) => {
 };
 
 // Create function for handle transaction update status
-const updateTransaction = async (status, transactionId) => {
-  await transaction.update(
-    {
-      status,
-    },
-    {
+const updateTransaction = async (status, transactionId, subscribe, paymentMethod, startDate, grossAmount) => {
+  try {
+    await transaction.update(
+      {
+        status,
+        paymentMethod,
+      },
+      {
+        where: {
+          id: transactionId,
+        },
+      }
+    );
+
+    // const dueDate = new Date(startDate);
+    // switch (grossAmount) {
+    //   case grossAmount === "7500.00":
+    //     dueDate.setDate(dueDate.getDate() + 7);
+
+    //     await transaction.update(
+    //       {
+    //         startDate,
+    //         dueDate,
+    //       },
+    //       {
+    //         where: {
+    //           id: transactionId,
+    //         },
+    //       }
+    //     );
+    //     break;
+    //   case grossAmount === "20000.00":
+    //     dueDate.setDate(dueDate.getDate() + 30);
+
+    //     await transaction.update(
+    //       {
+    //         startDate,
+    //         dueDate,
+    //       },
+    //       {
+    //         where: {
+    //           id: transactionId,
+    //         },
+    //       }
+    //     );
+    //     break;
+    //   case grossAmount === "40000.00":
+    //     dueDate.setDate(dueDate.getDate() + 90);
+
+    //     await transaction.update(
+    //       {
+    //         startDate,
+    //         dueDate,
+    //       },
+    //       {
+    //         where: {
+    //           id: transactionId,
+    //         },
+    //       }
+    //     );
+    //     break;
+    // }
+
+    // Kondisi untuk menentukan durasi
+    let dueDate;
+    if (grossAmount) {
+      if (grossAmount === "7500.00") {
+        dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + 7);
+
+        await transaction.update(
+          {
+            startDate,
+            dueDate,
+          },
+          {
+            where: {
+              id: transactionId,
+            },
+          }
+        );
+      } else if (grossAmount === "20000.00") {
+        dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + 30);
+
+        await transaction.update(
+          {
+            startDate,
+            dueDate,
+          },
+          {
+            where: {
+              id: transactionId,
+            },
+          }
+        );
+      } else if (grossAmount === "40000.00") {
+        dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + 90);
+
+        await transaction.update(
+          {
+            startDate,
+            dueDate,
+          },
+          {
+            where: {
+              id: transactionId,
+            },
+          }
+        );
+      }
+    }
+    // Get transaksi untuk update user
+    const getUserId = await transaction.findOne({
       where: {
         id: transactionId,
       },
-    }
-  );
-};
-
-// Create function for handle product update stock/qty
-const updateProduct = async (orderId) => {
-  const transactionData = await transaction.findOne({
-    where: {
-      id: orderId,
-    },
-  });
-  const productData = await product.findOne({
-    where: {
-      id: transactionData?.idProduct,
-    },
-  });
-  const qty = productData.qty - 1;
-  await product.update({ qty }, { where: { id: productData.id } });
-};
-
-// Handle send email
-const sendEmail = async (status, transactionId) => {
-  // Config service and email account
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.SYSTEM_EMAIL,
-      pass: process.env.SYSTEM_PASSWORD,
-    },
-  });
-
-  // Get transaction data
-  let data = await transaction.findOne({
-    where: {
-      id: transactionId,
-    },
-    attributes: {
-      exclude: ["createdAt", "updatedAt", "password"],
-    },
-    include: [
-      {
-        model: user,
-        as: "buyer",
-        attributes: {
-          exclude: ["createdAt", "updatedAt", "password", "status"],
-        },
-      },
-      {
-        model: product,
-        as: "product",
-        attributes: {
-          exclude: ["createdAt", "updatedAt", "idUser", "qty", "price", "desc"],
-        },
-      },
-    ],
-  });
-
-  data = JSON.parse(JSON.stringify(data));
-
-  // Email options content
-  const mailOptions = {
-    from: process.env.SYSTEM_EMAIL,
-    to: data?.buyer.email,
-    subject: "Payment status",
-    text: "Your payment is <br />" + status,
-    html: `<!DOCTYPE html>
-            <html lang="en">
-              <head>
-                <meta charset="UTF-8" />
-                <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                <title>Document</title>
-                <style>
-                  h1 {
-                    color: brown;
-                  }
-                </style>
-              </head>
-              <body>
-                <h2>Product payment :</h2>
-                <ul style="list-style-type:none;">
-                  <li>Name : ${data?.product?.name}</li>
-                  <li>Total payment: ${data?.price}</li>
-                  <li>Status : <b>${status}</b></li>
-                </ul>  
-              </body>
-            </html>`,
-  };
-
-  // Send an email if there is a change in the transaction status
-  if (data.status != status) {
-    transporter.sendMail(mailOptions, (err, info) => {
-      if (err) throw err;
-      console.log("Email sent: " + info.response);
-
-      return res.send({
-        status: "Success",
-        message: info.response,
-      });
     });
+
+    await user.update(
+      { subscribe: subscribe },
+      {
+        where: {
+          id: getUserId.userId,
+        },
+      }
+    );
+  } catch (error) {
+    console.log(error);
   }
 };
+
+// // Handle send email
+// const sendEmail = async (status, transactionId) => {
+//   // Config service and email account
+//   const transporter = nodemailer.createTransport({
+//     service: "gmail",
+//     auth: {
+//       user: process.env.SYSTEM_EMAIL,
+//       pass: process.env.SYSTEM_PASSWORD,
+//     },
+//   });
+
+//   // Get transaction data
+//   let data = await transaction.findOne({
+//     where: {
+//       id: transactionId,
+//     },
+//     attributes: {
+//       exclude: ["createdAt", "updatedAt", "password"],
+//     },
+//     include: [
+//       {
+//         model: user,
+//         as: "user",
+//         attributes: {
+//           exclude: ["createdAt", "updatedAt", "password", "status"],
+//         },
+//       },
+//       // {
+//       //   model: product,
+//       //   as: "product",
+//       //   attributes: {
+//       //     exclude: ["createdAt", "updatedAt", "idUser", "qty", "price", "desc"],
+//       //   },
+//       // },
+//     ],
+//   });
+
+//   data = JSON.parse(JSON.stringify(data));
+
+//   console.log("Buyer: ", data);
+
+//   // Email options content
+//   const mailOptions = {
+//     from: process.env.SYSTEM_EMAIL,
+//     to: data?.buyer?.email,
+//     subject: "Payment status",
+//     text: "Your payment is <br />",
+//     html: `<!DOCTYPE html>
+//             <html lang="en">
+//               <head>
+//                 <meta charset="UTF-8" />
+//                 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+//                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+//                 <title>Document</title>
+//                 <style>
+//                   h1 {
+//                     color: brown;
+//                   }
+//                 </style>
+//               </head>
+//               <body>
+//                 <h2>Product payment :</h2>
+//                 <ul style="list-style-type:none;">
+//                 </ul>
+//               </body>
+//             </html>`,
+//   };
+
+//   // Send an email if there is a change in the transaction status
+//   if (data.status != status) {
+//     transporter.sendMail(mailOptions, (err, info) => {
+//       if (err) throw err;
+//       console.log("Email sent: " + info.response);
+
+//       return res.send({
+//         status: "Success",
+//         message: info.response,
+//       });
+//     });
+//   }
+// };

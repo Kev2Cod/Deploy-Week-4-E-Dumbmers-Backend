@@ -30,13 +30,6 @@ const socketIo = (io) => {
           },
           include: [
             {
-              model: profile,
-              as: "profile",
-              attributes: {
-                exclude: ["createdAt", "updatedAt"],
-              },
-            },
-            {
               model: chat,
               as: "recipientMessage",
               attributes: {
@@ -56,6 +49,8 @@ const socketIo = (io) => {
           },
         });
 
+        console.log(adminContact);
+
         // emit event to send admin data on event “admin contact”
         socket.emit("admin contact", adminContact);
       } catch (err) {
@@ -67,13 +62,6 @@ const socketIo = (io) => {
       try {
         let customersContacts = await user.findAll({
           include: [
-            {
-              model: profile,
-              as: "profile",
-              attributes: {
-                exclude: ["createdAt", "updatedAt"],
-              },
-            },
             {
               model: chat,
               as: "recipientMessage",
@@ -100,7 +88,7 @@ const socketIo = (io) => {
         customersContacts = customersContacts.map((item) => {
           return {
             ...item,
-            image: item.image ? process.env.PATH_FILE + item.image : null,
+            // image: item.image ? process.env.PATH_FILE + item.image : null,
           };
         });
 

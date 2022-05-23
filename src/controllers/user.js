@@ -1,60 +1,13 @@
 // Models
-const { user, profile, product, transaction } = require("../../models");
+const { user, transaction } = require("../../models");
 
-// Controller
-exports.addUser = async (req, res) => {
-  try {
-    await user.create(req.body);
-    res.status(201).send({
-      status: "Success",
-      message: "Add User Success",
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(401).send({
-      status: "Failed",
-      message: "Server Error",
-    });
-  }
-};
-
-// ============== GET USER ========================
+// ============== GET USERS ========================
 exports.getUsers = async (req, res) => {
   try {
     const users = await user.findAll({
       attributes: {
         exclude: ["password", "createdAt", "updatedAt"],
       },
-      include: [
-        {
-          model: profile,
-          as: "profile",
-          attributes: {
-            exclude: ["idUser", "createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: product,
-          as: "product",
-          attributes: {
-            exclude: ["createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: transaction,
-          as: "buyerTransactions",
-          attributes: {
-            exclude: ["createdAt", "updatedAt"],
-          },
-        },
-        {
-          model: transaction,
-          as: "sellerTransactions",
-          attributes: {
-            exclude: ["createdAt", "updatedAt"],
-          },
-        },
-      ],
     });
 
     // ? code dibawah disimpan, barangkali bisa dipakai
@@ -95,28 +48,9 @@ exports.getUser = async (req, res) => {
       attributes: {
         exclude: ["createdAt", "updatedAt", "password"],
       },
-      include: [
-        {
-          model: profile,
-          as: "profile",
-          attributes: {
-            exclude: ["idUser", "createdAt", "updatedAt"],
-          },
-        },
-      ],
     });
 
     data = JSON.parse(JSON.stringify(data));
-
-    data = {
-      ...data,
-      profile: {
-        phone: data?.profile?.phone,
-        gender: data?.profile?.gender,
-        address: data?.profile?.address,
-        image: data?.profile?.image ? process.env.PATH_FILE + data?.profile?.image : null,
-      },
-    };
 
     res.status(200).send({
       status: "Success",
@@ -135,11 +69,13 @@ exports.getUser = async (req, res) => {
 // ============== UPDATE USER ========================
 exports.updateUser = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.body;
 
-    await user.update(req.body, {
-      where: { id },
+    const data = await user.update(req.body, {
+      where: { id: 3 },
     });
+
+    console.log(data);
 
     res.status(200).send({
       status: "Success",

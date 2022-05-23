@@ -1,22 +1,32 @@
-const { user, profile } = require("../../models");
+const { user } = require("../../models");
 
-const Joi = require("joi");
+const joi = require("joi");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 // ============= REGISTER =============
 exports.register = async (req, res) => {
-  const schema = Joi.object({
-    name: Joi.string().min(2).required(),
-    email: Joi.string().email().min(3).required(),
-    password: Joi.string().min(6).required(),
+  const data = req.body;
+
+  // skema pengecekan inputan
+  const schema = joi.object({
+    email: joi.string().email().min(6).required(),
+    password: joi.string().min(3).required(),
+    name: joi.string().min(3).required(),
+    gender: joi.string().min(3).required(),
+    phone: joi.string().min(3).required(),
+    address: joi.string().min(3).required(),
+    subscribe: joi.boolean(),
   });
 
+  // jika validasi tidak memenuhi
   const { error } = schema.validate(req.body);
 
+  // jika tidak memenuhi
   if (error) {
     return res.status(400).send({
       error: {
+        status: "Validation Failed",
         message: error.details[0].message,
       },
     });
@@ -24,36 +34,30 @@ exports.register = async (req, res) => {
 
   try {
     // Cek Email
-    const email = await user.findOne({
+    const checkEmail = await user.findOne({
       where: {
         email: req.body.email,
       },
     });
 
-    if (email) {
+    if (checkEmail) {
       return res.status(401).send({
         status: "failed",
         message: "Email telah terdaftar",
       });
     }
 
-    // Hashed Password
+    // bcrypt email enkripsi password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(req.body.password, salt);
 
-    // Tambah user
+    // Tambah user ke database
     const newUser = await user.create({
-      name: req.body.name,
-      email: req.body.email.toLowerCase(),
+      ...data,
+      subscribe: false,
       status: "customers",
       password: hashedPassword,
     });
-
-    const newProfile = await profile.create({
-      idUser: newUser.id,
-    });
-
-    console.log("New Profile : ", newProfile);
 
     // Generate token
     const token = jwt.sign({ id: newUser.id }, process.env.TOKEN_KEY);
@@ -65,7 +69,7 @@ exports.register = async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
-        profile: newProfile,
+        subscribe: newUser.subscribe,
         token,
       },
     });
@@ -81,13 +85,15 @@ exports.register = async (req, res) => {
 // ============== LOGIN ===============
 exports.login = async (req, res) => {
   //Validation
-  const schema = Joi.object({
-    email: Joi.string().min(5).required(),
-    password: Joi.string().min(3).required(),
+  const schema = joi.object({
+    email: joi.string().min(5).required(),
+    password: joi.string().min(5).required(),
   });
 
+  // skema pengecekan inputan
   const { error } = schema.validate(req.body);
 
+  // jika tidak memenuhi
   if (error) {
     res.status(400).send({
       message: error.details[0].message,
@@ -95,19 +101,11 @@ exports.login = async (req, res) => {
   }
 
   try {
+    // Mencari Email
     const userExist = await user.findOne({
       where: {
         email: req.body.email.toLowerCase(),
       },
-      include: [
-        {
-          model: profile,
-          as: "profile",
-          attributes: {
-            exclude: ["idUser", "createdAt", "updatedAt"],
-          },
-        },
-      ],
       attributes: {
         exclude: ["createdAt", "updatedAt"],
       },
@@ -130,7 +128,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Json Web Token
+    // membuat token
     const token = jwt.sign({ id: userExist.id }, process.env.TOKEN_KEY);
 
     res.status(200).send({
@@ -141,7 +139,7 @@ exports.login = async (req, res) => {
         name: userExist.name,
         email: userExist.email,
         status: userExist.status,
-        profile: userExist.profile,
+        transaction: userExist.transaction,
         token,
       },
     });
@@ -182,6 +180,9 @@ exports.checkAuth = async (req, res) => {
           name: dataUser.name,
           email: dataUser.email,
           status: dataUser.status,
+          transaction: dataUser.transaction,
+          subscribe: dataUser.subscribe,
+          // image: dataUser.image
         },
       },
     });
